@@ -1,6 +1,7 @@
 ﻿using EmployeeAPI.Models;
 using EmployeeAPI.Services;
 using Microsoft.AspNetCore.Mvc;
+using MongoDB.Driver;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -79,7 +80,14 @@ namespace EmployeeAPI.Controllers
             // Asignar el ID del puesto al empleado
             newEmployee.Position_Id = position.Id;
 
-            await _mongoDBService.CreateAsync(newEmployee);
+            try
+            {
+                await _mongoDBService.CreateAsync(newEmployee);
+            }
+            catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+            {
+                return Conflict($"An employee with the email '{newEmployee.Email}' already exists.");
+            }
 
             return CreatedAtAction(nameof(Get), new { id = newEmployee.Id }, newEmployee);
         }
