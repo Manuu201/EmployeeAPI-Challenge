@@ -261,6 +261,33 @@ Cuando la API y MongoDB están disponibles, el endpoint responde con un estado e
 }
 ```
 
+## Pruebas
+
+El proyecto utiliza xUnit y sus pruebas se encuentran en `Tests/`.
+
+### Con .NET 8 SDK instalado
+
+```shell
+dotnet test Tests/EmployeeAPI.Tests.csproj
+```
+
+### Sin .NET 8 SDK local, usando Docker
+
+```powershell
+docker run --rm --volume "$($PWD.Path):/src" --workdir /src mcr.microsoft.com/dotnet/sdk:8.0 dotnet test Tests/EmployeeAPI.Tests.csproj
+```
+
+Resultado observado:
+
+```text
+Passed: 12
+Failed: 0
+Skipped: 0
+Total: 12
+```
+
+Durante la compilación aparecieron 11 warnings de nulabilidad preexistentes, pero no impidieron que los tests finalizaran correctamente.
+
 ## Autenticación
 
 Salvo las excepciones indicadas más adelante, los endpoints requieren un token JWT válido en el encabezado `Authorization`.
