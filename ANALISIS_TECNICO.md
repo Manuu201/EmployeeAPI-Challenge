@@ -674,10 +674,19 @@ sequenceDiagram
     Note over Controller: Asigna Employee.Position_Id
     Controller->>Service: CreateAsync(Employee)
     Service->>DB: Insertar Employee
-    DB-->>Service: Inserción completada
-    Service-->>Controller: Operación completada
-    Controller-->>Middleware: 201 Created + Employee
-    Middleware-->>Cliente: 201 Created + Employee
+
+    alt Inserción completada
+        DB-->>Service: Inserción completada
+        Service-->>Controller: Operación completada
+        Controller-->>Middleware: 201 Created + Employee
+        Middleware-->>Cliente: 201 Created + Employee
+    else Colisión DuplicateKey
+        DB-->>Service: MongoWriteException DuplicateKey
+        Service-->>Controller: Propagar MongoWriteException
+        Note over Controller: Captura ServerErrorCategory.DuplicateKey
+        Controller-->>Middleware: 409 Conflict
+        Middleware-->>Cliente: Email duplicado
+    end
 ```
 
 ### Registro de Punch
@@ -815,13 +824,15 @@ La siguiente prioridad considera el impacto posible, la probabilidad observada y
 
 | Prioridad | Hallazgos | Criterio |
 |---|---|---|
-| Alta | Contraseñas y credenciales conocidas; inconsistencia al actualizar Employee; ambigüedad de DNI y PIN | Pueden comprometer el acceso o asociar datos con una identidad o estructura incorrecta |
-| Media | Secreto JWT predeterminado; ausencia de permisos; revocación de JWT; CORS permisivo; referencias huérfanas; excepción no manejada ante email duplicado | El impacto depende del entorno, del crecimiento del sistema o de condiciones adicionales |
-| Baja | Creación no atómica de Employee; `tokenExpiration` incompleto | Son problemas confirmados, pero actualmente tienen menor probabilidad o no participan directamente en la validación efectiva |
+| Alta | `S-01` Contraseñas; `I-01` actualización de Employee; `I-05` unicidad de DNI/PIN | Pueden comprometer el acceso o asociar datos con una identidad o estructura incorrecta |
+| Media | `S-02` secreto JWT; `S-03` ausencia de permisos; `S-04` revocación de JWT; `S-05` CORS; `I-02` referencias huérfanas | El impacto depende del entorno, del crecimiento del sistema o de condiciones adicionales |
+| Baja | `I-03` creación no atómica; `I-06` `tokenExpiration` incompleto | Son problemas confirmados, pero actualmente tienen menor probabilidad o no participan directamente en la validación efectiva |
 
-### Seguridad
+El hallazgo relacionado con la colisión concurrente del índice único de email fue tratado mediante la mejora documentada en `MEJORA_IMPLEMENTADA.md` y ya no se considera un pendiente activo.
 
-#### Contraseñas en texto plano y credenciales iniciales conocidas
+### 1. Seguridad
+
+#### S-01 — Contraseñas en texto plano y credenciales iniciales conocidas
 
 **Comportamiento confirmado por código**
 
@@ -841,7 +852,9 @@ Quien obtenga acceso de lectura a la colección User puede conocer las contrase�
 
 Almacenar hashes de contraseña y reemplazar la creación automática de credenciales conocidas por un mecanismo de inicialización explícito y configurable.
 
-#### Secreto JWT de desarrollo utilizado como valor predeterminado
+---
+
+#### S-02 — Secreto JWT de desarrollo utilizado como valor predeterminado
 
 **Comportamiento confirmado por configuración**
 
@@ -857,7 +870,9 @@ Este valor es apropiado solamente para desarrollo local y no debe considerarse u
 
 Mantener el valor incluido en `appsettings.json` únicamente para pruebas locales. En despliegues, proporcionar `Jwt__SecretKey` mediante una variable externa. Una alternativa sencilla con Docker Compose es utilizar un archivo `.env` excluido del repositorio e inyectar explícitamente la variable en el servicio de la API.
 
-#### Ausencia de autorización por roles o permisos
+---
+
+#### S-03 — Ausencia de autorización por roles o permisos
 
 **Comportamiento confirmado por código**
 
@@ -873,7 +888,9 @@ El sistema comprueba que el cliente presente un token válido, pero no controla 
 
 Definir los tipos de usuario que realmente necesite el sistema e incorporar sus roles o permisos al proceso de autorización. Esta mejora debe diseñarse según los requisitos funcionales futuros, ya que el challenge no especifica una matriz concreta de permisos.
 
-#### Validación del JWT desconectada del estado del usuario
+---
+
+#### S-04 — Validación del JWT desconectada del estado del usuario
 
 **Comportamiento confirmado por código**
 
@@ -891,7 +908,9 @@ Este comportamiento se deduce directamente del código, pero no fue comprobado e
 
 Definir explícitamente si la API utilizará JWT completamente stateless o sesiones controladas desde la base de datos. Si se necesita revocación inmediata, debe existir una comprobación del estado del usuario o un mecanismo equivalente. Si se mantiene un modelo stateless, debería evaluarse si es necesario guardar el token completo en User.
 
-#### Configuración CORS basada en el Origin recibido
+---
+
+#### S-05 — Configuración CORS basada en el Origin recibido
 
 **Comportamiento confirmado por código**
 
@@ -909,9 +928,9 @@ El impacto concreto depende de cómo el cliente almacene y envíe el Bearer toke
 
 Configurar una lista de orígenes permitidos mediante el soporte CORS de ASP.NET Core y mantener valores distintos por entorno. Para este proyecto no se requiere incorporar una tecnología adicional.
 
-### Integridad de datos
+### 2. Integridad de datos
 
-#### Actualizaciones de Employee sin sincronización de Department y Position
+#### I-01 — Actualizaciones de Employee sin sincronización de Department y Position
 
 **Comportamiento confirmado por código**
 
@@ -931,7 +950,9 @@ Un Employee puede quedar con nombres e identificadores organizacionales contradi
 
 Aplicar en las actualizaciones una única regla de resolución y validación de Department y Position, evitando depender de que el cliente mantenga sincronizados los nombres y los identificadores.
 
-#### Referencias lógicas huérfanas después de eliminaciones
+---
+
+#### I-02 — Referencias lógicas huérfanas después de eliminaciones
 
 **Comportamiento confirmado por código**
 
@@ -949,7 +970,9 @@ La conservación de Punch históricos podría ser intencional, pero el código n
 
 Definir una política de eliminación para cada relación. Según las necesidades del sistema, podría impedirse la eliminación mientras existan referencias, utilizarse eliminación lógica o actualizarse las entidades relacionadas. No se debe asumir automáticamente que eliminar en cascada es correcto para registros históricos de asistencia.
 
-#### Creación de Employee mediante operaciones no atómicas
+---
+
+#### I-03 — Creación de Employee mediante operaciones no atómicas
 
 **Comportamiento confirmado por código**
 
@@ -971,23 +994,25 @@ Además, la secuencia “buscar y después crear” puede ejecutarse simultánea
 
 Definir qué nivel de atomicidad necesita este flujo. Podrían incorporarse restricciones únicas y manejo explícito de conflictos. Una transacción debería considerarse solamente si la topología de MongoDB utilizada y los requisitos del sistema la justifican.
 
-#### Excepción no manejada ante una colisión del índice único de email
+---
 
-**Comportamiento confirmado por código**
+#### I-04 — Colisión concurrente del índice único de email
 
-`EmployeeController.Post` consulta primero `MongoDBService.GetByEmailAsync` y responde `409 Conflict` si encuentra un Employee con el mismo email. Después de esa comprobación, la creación termina en `MongoDBService.CreateAsync`, que ejecuta `InsertOneAsync` directamente.
+**Problema original confirmado**
 
-El índice único de `Employee.Email` protege la colección incluso si dos requests concurrentes superan la consulta previa. Sin embargo, ni el controller ni el servicio capturan la `MongoWriteException` de categoría `DuplicateKey` que puede producir la inserción, y `Program.cs` tampoco configura un manejador global que la traduzca a una respuesta de negocio.
+`EmployeeController.Post` consulta primero `MongoDBService.GetByEmailAsync` y responde `409 Conflict` si encuentra un Employee con el mismo email. Ese pre-check no evita que dos requests concurrentes comprueben la ausencia del email antes de que alguna complete la inserción. El índice único de `Employee.Email` continúa siendo la garantía definitiva que impide persistir documentos duplicados.
 
-**Riesgo**
+**Estado actual**
 
-Dos requests concurrentes podrían comprobar que el email no existe antes de que alguna lo inserte. La primera inserción tendría éxito y la segunda sería rechazada por MongoDB, pero la excepción se propagaría como un error `500` en lugar del `409 Conflict` que la API devuelve en el caso secuencial normal.
+La llamada a `MongoDBService.CreateAsync` permanece rodeada por un manejo específico en `EmployeeController.Post`. Si `InsertOneAsync` produce una `MongoWriteException` cuyo filtro cumple `ex.WriteError?.Category == ServerErrorCategory.DuplicateKey`, el controller traduce la colisión a `409 Conflict` con el mismo mensaje utilizado por el pre-check secuencial. Los demás errores de MongoDB no son capturados por este bloque y continúan propagándose.
 
-**Posible mejora futura**
+**Riesgo residual**
 
-Mantener el índice único como garantía definitiva y capturar específicamente el conflicto de clave duplicada durante la inserción para devolver `409 Conflict`. El manejo no debería convertir otros errores de MongoDB en conflictos de email.
+La mejora maneja la colisión detectada por MongoDB, pero no elimina la condición de carrera ni resuelve la falta de atomicidad entre la creación de Department, Position y Employee. Además, si en el futuro Employee incorpora otro índice único, su `DuplicateKey` también podría recibir el mensaje de email duplicado. La decisión y su evidencia de validación se documentan en `MEJORA_IMPLEMENTADA.md`.
 
-#### Identificadores de Employee y Enrollment sin unicidad garantizada
+---
+
+#### I-05 — Identificadores de Employee y Enrollment sin unicidad garantizada
 
 **Comportamiento confirmado por código**
 
@@ -1005,7 +1030,9 @@ La resolución de identidad mediante DNI o PIN puede ser ambigua y depender del 
 
 Definir explícitamente las reglas de unicidad para DNI y para los PIN globales o específicos por dispositivo. Después podrían aplicarse índices y validaciones coherentes con esas reglas, incluyendo el manejo de conflictos concurrentes.
 
-#### `tokenExpiration` no representa una fecha de expiración completa
+---
+
+#### I-06 — `tokenExpiration` no representa una fecha de expiración completa
 
 **Comportamiento confirmado por código**
 

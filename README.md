@@ -600,4 +600,4 @@ Respuesta `200 OK`, abreviada:
 - La actualización de empleados puede dejar inconsistencias entre los nombres y los identificadores de Department y Position.
 - La eliminación de entidades no elimina automáticamente sus referencias relacionadas.
 
-La evidencia y el análisis detallado de estos hallazgos se presentan en `ANALISIS_TECNICO.md`. En esta etapa no se implementan correcciones.
+El análisis detallado de estas limitaciones se presenta en `ANALISIS_TECNICO.md`. El manejo del conflicto de email duplicado concurrente fue implementado y se documenta en `MEJORA_IMPLEMENTADA.md`; las demás limitaciones permanecen fuera del alcance de esa mejora.
