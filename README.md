@@ -381,7 +381,7 @@ El sistema valida que el token sea correcto, pero no implementa roles ni permiso
 | Enrolamientos | `DELETE /api/enrollment/{id}` | `id` de 24 caracteres | `204`; `404` |
 | Marcaciones | `GET /api/punch` | Query opcional: `employeeId`, `deviceId`, `from`, `to` | `200` con lista; `400` si `from > to` |
 | Marcaciones | `GET /api/punch/{id}` | `id` de 24 caracteres | `200`; `404` |
-| Marcaciones | `POST /api/punch` | `device_Id`, `punchType` y `employee_Id`, `dni` o `pin` | `201`; `400`, `404` o `409` según validación |
+| Marcaciones | `POST /api/punch` | `device_Id`, `punchType` y al menos uno de: `employee_Id`, `dni` o `pin` | `201`; `400`, `404` o `409` según validación |
 | Tipos de marca | `GET /api/punch/types` | Sin entrada | `200` con tipos |
 | Tipos de marca | `POST /api/punch/types` | `code`, `name`; `description` opcional | `201`; `400` validación; `409` por código |
 | Residual | `GET /weatherforecast` | Sin entrada | `200` con datos simulados |
